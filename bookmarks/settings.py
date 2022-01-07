@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'social_django',
     'images.apps.ImagesConfig',
     'sorl.thumbnail',# Для превьюшек изображений
+    'actions.apps.ActionsConfig',
 ]
 
 MIDDLEWARE = [

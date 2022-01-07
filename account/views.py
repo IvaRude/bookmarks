@@ -13,6 +13,8 @@ from bookmarks.common.decorators import ajax_required
 from .forms import LoginForm, UserRegistrationForm, \
                    UserEditForm, ProfileEditForm
 from .models import Profile
+from actions.utils import create_action
+from actions.models import Action
 
 
 def user_login(request):
@@ -26,8 +28,7 @@ def user_login(request):
             if user is not None:
                 if user.is_active:
                     login(request, user)
-                    return HttpResponse('Authenticated '\
-                                        'successfully')
+                    return HttpResponse('Authenticated successfully')
                 else:
                     return HttpResponse('Disabled account')
             else:
@@ -39,9 +40,20 @@ def user_login(request):
 
 @login_required
 def dashboard(request):
-    return render(request,
-                  'account/dashboard.html',
-                  {'section': 'dashboard'})
+    # По умолчанию отображаем все действия.
+    actions = Action.objects.exclude(user=request.user)
+    following_ids = request.user.following.values_list('id', flat=True)
+    if following_ids:
+        # Если текущий пользователь подписался на кого-то,
+        # отображаем только действия этих пользователей.
+        actions = actions.filter(user_id__in=following_ids)
+    # В одном запросе сразу делаем JOIN с таблицей Profile
+    # select_related подходит к OneToOne и ForeignKey, делает на уровне БД
+    # prefetch_related подходит для ManyToMany, делает на уровне Python
+    actions = actions.select_related('user', 'user__profile') \
+                     .prefetch_related('target')[:10]
+    return render(request, 'account/dashboard.html', {'section': 'dashboard',
+                                                      'actions': actions})
 
 
 def register(request):
@@ -57,6 +69,7 @@ def register(request):
             new_user.save()
             # Create the user profile
             Profile.objects.create(user=new_user)
+            create_action(new_user, 'has created an account')
             return render(request,
                           'account/register_done.html',
                           {'new_user': new_user})
