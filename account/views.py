@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 from .models import Contact
 from bookmarks.common.decorators import ajax_required
@@ -51,7 +52,24 @@ def dashboard(request):
     # select_related подходит к OneToOne и ForeignKey, делает на уровне БД
     # prefetch_related подходит для ManyToMany, делает на уровне Python
     actions = actions.select_related('user', 'user__profile') \
-                     .prefetch_related('target')[:10]
+                     .prefetch_related('target')
+    paginator = Paginator(actions, 8)
+    page = request.GET.get('page')
+    try:
+        actions = paginator.page(page)
+    except PageNotAnInteger:
+        # If page is not an integer deliver the first page
+        actions = paginator.page(1)
+    except EmptyPage:
+        if request.is_ajax():
+            # If the request is AJAX and the page is out of range
+            # return an empty page
+            return HttpResponse('')
+        # If page is out of range deliver last page of results
+        actions = paginator.page(paginator.num_pages)
+    if request.is_ajax():
+        return render(request, 'account/dashboard_ajax.html', {'section': 'dashboard',
+                                                               'actions': actions})
     return render(request, 'account/dashboard.html', {'section': 'dashboard',
                                                       'actions': actions})
 
